@@ -36,12 +36,13 @@ struct FFInterpolatorDispatchParameters
 	bool DebugTearLines;
 	bool DebugView;
 
-    float CameraNear;
-	float CameraFar;
-	float CameraFovAngleVertical;
-	FfxFloatCoords2D MinMaxLuminance;
-};
-
+    	float CameraNear;
+    	float CameraFar;
+    	float CameraFovAngleVertical;
+    	FfxFloatCoords2D MinMaxLuminance;
+    
+    	float FrameTimeDelta;
+    };
 class FFInterpolator
 {
 private:

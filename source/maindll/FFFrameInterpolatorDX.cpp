@@ -76,26 +76,54 @@ std::array<uint8_t, 8> FFFrameInterpolatorDX::GetActiveAdapterLUID() const
 
 void FFFrameInterpolatorDX::CopyTexture(FfxCommandList CommandList, const FfxResource *Destination, const FfxResource *Source)
 {
+	if (Destination->resource == Source->resource)
+		return;
+
 	const auto cmdList12 = reinterpret_cast<ID3D12GraphicsCommandList *>(CommandList);
 
 	D3D12_RESOURCE_BARRIER barriers[2] = {};
-	barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	barriers[0].Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	barriers[0].Transition.pResource = static_cast<ID3D12Resource *>(Destination->resource); // Destination
-	barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-	barriers[0].Transition.StateBefore = ffxGetDX12StateFromResourceState(Destination->state);
-	barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+	uint32_t barrierCount = 0;
 
-	barriers[1] = barriers[0];
-	barriers[1].Transition.pResource = static_cast<ID3D12Resource *>(Source->resource); // Source
-	barriers[1].Transition.StateBefore = ffxGetDX12StateFromResourceState(Source->state);
-	barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+	const auto destBeforeState = ffxGetDX12StateFromResourceState(Destination->state);
+	const auto destAfterState = D3D12_RESOURCE_STATE_COPY_DEST;
 
-	cmdList12->ResourceBarrier(2, barriers);
-	cmdList12->CopyResource(barriers[0].Transition.pResource, barriers[1].Transition.pResource);
-	std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
-	std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
-	cmdList12->ResourceBarrier(2, barriers);
+	if (destBeforeState != destAfterState)
+	{
+		auto& barrier = barriers[barrierCount++];
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		barrier.Transition.pResource = static_cast<ID3D12Resource *>(Destination->resource);
+		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		barrier.Transition.StateBefore = destBeforeState;
+		barrier.Transition.StateAfter = destAfterState;
+	}
+
+	const auto srcBeforeState = ffxGetDX12StateFromResourceState(Source->state);
+	const auto srcAfterState = D3D12_RESOURCE_STATE_COPY_SOURCE;
+
+	if (srcBeforeState != srcAfterState)
+	{
+		auto& barrier = barriers[barrierCount++];
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		barrier.Transition.pResource = static_cast<ID3D12Resource *>(Source->resource);
+		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		barrier.Transition.StateBefore = srcBeforeState;
+		barrier.Transition.StateAfter = srcAfterState;
+	}
+
+	if (barrierCount > 0)
+		cmdList12->ResourceBarrier(barrierCount, barriers);
+
+	cmdList12->CopyResource(static_cast<ID3D12Resource *>(Destination->resource), static_cast<ID3D12Resource *>(Source->resource));
+
+	if (barrierCount > 0)
+	{
+		for (uint32_t i = 0; i < barrierCount; i++)
+			std::swap(barriers[i].Transition.StateBefore, barriers[i].Transition.StateAfter);
+
+		cmdList12->ResourceBarrier(barrierCount, barriers);
+	}
 }
 
 bool FFFrameInterpolatorDX::LoadTextureFromNGXParameters(

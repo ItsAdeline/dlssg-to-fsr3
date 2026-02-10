@@ -99,56 +99,84 @@ std::array<uint8_t, 8> FFFrameInterpolatorVK::GetActiveAdapterLUID() const
 
 void FFFrameInterpolatorVK::CopyTexture(FfxCommandList CommandList, const FfxResource *Destination, const FfxResource *Source)
 {
+	if (Destination->resource == Source->resource)
+		return;
+
 	const auto cmdListVk = reinterpret_cast<VkCommandBuffer>(CommandList);
 
-	const uint32_t srcStageMask = MakeVulkanStageFlags(Source->state) | MakeVulkanStageFlags(Destination->state);
-	const uint32_t destStageMask = MakeVulkanStageFlags(FFX_RESOURCE_STATE_COPY_SRC) | MakeVulkanStageFlags(FFX_RESOURCE_STATE_COPY_DEST);
+	VkImageMemoryBarrier barriers[2] = {};
+	uint32_t barrierCount = 0;
+	VkPipelineStageFlags srcStageMask = 0;
+	VkPipelineStageFlags destStageMask = 0;
 
-	std::array barriers = {
-		MakeVulkanBarrier(static_cast<VkImage>(Source->resource), Source->state, FFX_RESOURCE_STATE_COPY_SRC, false),
-		MakeVulkanBarrier(static_cast<VkImage>(Destination->resource), Destination->state, FFX_RESOURCE_STATE_COPY_DEST, false),
-	};
+	if (Destination->state != FFX_RESOURCE_STATE_COPY_DEST)
+	{
+		barriers[barrierCount++] = MakeVulkanBarrier(static_cast<VkImage>(Destination->resource), Destination->state, FFX_RESOURCE_STATE_COPY_DEST, false);
+		srcStageMask |= MakeVulkanStageFlags(Destination->state);
+		destStageMask |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}
 
-	vkCmdPipelineBarrier(
-		cmdListVk,
-		srcStageMask,
-		destStageMask,
-		0,
-		0,
-		nullptr,
-		0,
-		nullptr,
-		static_cast<uint32_t>(barriers.size()),
-		barriers.data());
+	if (Source->state != FFX_RESOURCE_STATE_COPY_SRC)
+	{
+		barriers[barrierCount++] = MakeVulkanBarrier(static_cast<VkImage>(Source->resource), Source->state, FFX_RESOURCE_STATE_COPY_SRC, false);
+		srcStageMask |= MakeVulkanStageFlags(Source->state);
+		destStageMask |= VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}
+
+	if (barrierCount > 0)
+	{
+		vkCmdPipelineBarrier(
+			cmdListVk,
+			srcStageMask,
+			destStageMask,
+			0,
+			0,
+			nullptr,
+			0,
+			nullptr,
+			barrierCount,
+			barriers);
+	}
 
 	VkImageCopy copyRegion = {};
 	copyRegion.extent.width = Destination->description.width;
 	copyRegion.extent.height = Destination->description.height;
 	copyRegion.extent.depth = Destination->description.depth;
-	copyRegion.dstSubresource.aspectMask = barriers[0].subresourceRange.aspectMask;
-	copyRegion.dstSubresource.mipLevel = barriers[0].subresourceRange.baseMipLevel;
-	copyRegion.dstSubresource.baseArrayLayer = barriers[0].subresourceRange.baseArrayLayer;
-	copyRegion.dstSubresource.layerCount = barriers[0].subresourceRange.layerCount;
+	copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	copyRegion.dstSubresource.mipLevel = 0;
+	copyRegion.dstSubresource.baseArrayLayer = 0;
+	copyRegion.dstSubresource.layerCount = 1;
 	copyRegion.srcSubresource = copyRegion.dstSubresource;
 
-	vkCmdCopyImage(cmdListVk, barriers[0].image, barriers[0].newLayout, barriers[1].image, barriers[1].newLayout, 1, &copyRegion);
-
-	std::swap(barriers[0].srcAccessMask, barriers[0].dstAccessMask);
-	std::swap(barriers[0].oldLayout, barriers[0].newLayout);
-	std::swap(barriers[1].srcAccessMask, barriers[1].dstAccessMask);
-	std::swap(barriers[1].oldLayout, barriers[1].newLayout);
-
-	vkCmdPipelineBarrier(
+	vkCmdCopyImage(
 		cmdListVk,
-		destStageMask,
-		srcStageMask,
-		0,
-		0,
-		nullptr,
-		0,
-		nullptr,
-		static_cast<uint32_t>(barriers.size()),
-		barriers.data());
+		static_cast<VkImage>(Source->resource),
+		getVKImageLayoutFromResourceState(Source->state == FFX_RESOURCE_STATE_COPY_SRC ? Source->state : FFX_RESOURCE_STATE_COPY_SRC),
+		static_cast<VkImage>(Destination->resource),
+		getVKImageLayoutFromResourceState(Destination->state == FFX_RESOURCE_STATE_COPY_DEST ? Destination->state : FFX_RESOURCE_STATE_COPY_DEST),
+		1,
+		&copyRegion);
+
+	if (barrierCount > 0)
+	{
+		for (uint32_t i = 0; i < barrierCount; i++)
+		{
+			std::swap(barriers[i].srcAccessMask, barriers[i].dstAccessMask);
+			std::swap(barriers[i].oldLayout, barriers[i].newLayout);
+		}
+
+		vkCmdPipelineBarrier(
+			cmdListVk,
+			destStageMask,
+			srcStageMask,
+			0,
+			0,
+			nullptr,
+			0,
+			nullptr,
+			barrierCount,
+			barriers);
+	}
 }
 
 bool FFFrameInterpolatorVK::LoadTextureFromNGXParameters(

@@ -66,6 +66,9 @@ FfxErrorCode FFFrameInterpolator::Dispatch(void *CommandList, NGXInstanceParamet
 		if (!BuildFrameInterpolationParameters(&fsrFiDispatchDesc, NGXParameters))
 			return FFX_ERROR_INVALID_ARGUMENT;
 
+		m_LastFrameTimeDelta = NGXParameters->GetFloatOrDefault("DLSSG.FrameTimeDelta", m_LastFrameTimeDelta);
+		fsrFiDispatchDesc.FrameTimeDelta = m_LastFrameTimeDelta;
+
 		fsrFiDispatchDesc.DebugView = g_EnableDebugOverlay;
 		fsrFiDispatchDesc.DebugTearLines = g_EnableDebugTearLines;
 

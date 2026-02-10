@@ -57,7 +57,7 @@ FfxErrorCode FFInterpolator::Dispatch(const FFInterpolatorDispatchParameters& Pa
 		dispatchDesc.cameraFovAngleVertical = Parameters.CameraFovAngleVertical;
 		dispatchDesc.viewSpaceToMetersFactor = 1.0f;
 
-		dispatchDesc.frameTimeDelta = 1000.0f / 60.0f; // Unused
+		dispatchDesc.frameTimeDelta = Parameters.FrameTimeDelta;
 		dispatchDesc.reset = Parameters.Reset;
 
 		dispatchDesc.backBufferTransferFunction = Parameters.HDR ? FFX_BACKBUFFER_TRANSFER_FUNCTION_PQ

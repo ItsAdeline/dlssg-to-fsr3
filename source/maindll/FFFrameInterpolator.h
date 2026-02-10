@@ -35,6 +35,8 @@ private:
 	uint32_t m_PostUpscaleRenderWidth = 0;
 	uint32_t m_PostUpscaleRenderHeight = 0;
 
+	float m_LastFrameTimeDelta = 1000.0f / 60.0f;
+
 public:
 	FFFrameInterpolator(uint32_t OutputWidth, uint32_t OutputHeight);
 	FFFrameInterpolator(const FFFrameInterpolator&) = delete;
