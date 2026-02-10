@@ -65,7 +65,7 @@ FfxErrorCode FFInterpolator::Dispatch(const FFInterpolatorDispatchParameters& Pa
 		dispatchDesc.minMaxLuminance[0] = Parameters.MinMaxLuminance.x;
 		dispatchDesc.minMaxLuminance[1] = Parameters.MinMaxLuminance.y;
 
-		dispatchDesc.frameID = 0; // Not async and not bindless. Don't bother.
+		dispatchDesc.frameID = Parameters.FrameID;
 
 		dispatchDesc.dilatedDepth = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_DilatedDepth);
 		dispatchDesc.dilatedMotionVectors = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_DilatedMotionVectors);
@@ -90,7 +90,7 @@ FfxErrorCode FFInterpolator::Dispatch(const FFInterpolatorDispatchParameters& Pa
 		prepareDesc.depth = Parameters.InputDepth;
 		prepareDesc.motionVectors = Parameters.InputMotionVectors;
 
-		prepareDesc.frameID = dispatchDesc.frameID;
+		prepareDesc.frameID = Parameters.FrameID;
 
 		prepareDesc.dilatedDepth = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_DilatedDepth);
 		prepareDesc.dilatedMotionVectors = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_DilatedMotionVectors);
@@ -107,6 +107,7 @@ FfxErrorCode FFInterpolator::CreateContextDeferred(const FFInterpolatorDispatchP
 {
 	FfxFrameInterpolationContextDescription desc = {};
 	desc.backendInterface = m_BackendInterface;
+	desc.flags = FFX_FRAMEINTERPOLATION_ENABLE_ASYNC_SUPPORT;
 
 	if (Parameters.DepthInverted)
 		desc.flags |= FFX_FRAMEINTERPOLATION_ENABLE_DEPTH_INVERTED;

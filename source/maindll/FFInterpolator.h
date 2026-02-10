@@ -41,9 +41,9 @@ struct FFInterpolatorDispatchParameters
     	float CameraFovAngleVertical;
     	FfxFloatCoords2D MinMaxLuminance;
     
-    	float FrameTimeDelta;
-    };
-class FFInterpolator
+    		float FrameTimeDelta;
+    		uint32_t FrameID;
+    	};class FFInterpolator
 {
 private:
 	const uint32_t m_MaxRenderWidth;

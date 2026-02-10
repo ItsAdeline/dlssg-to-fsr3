@@ -68,6 +68,7 @@ FfxErrorCode FFFrameInterpolator::Dispatch(void *CommandList, NGXInstanceParamet
 
 		m_LastFrameTimeDelta = NGXParameters->GetFloatOrDefault("DLSSG.FrameTimeDelta", m_LastFrameTimeDelta);
 		fsrFiDispatchDesc.FrameTimeDelta = m_LastFrameTimeDelta;
+		fsrFiDispatchDesc.FrameID = m_FrameID++;
 
 		fsrFiDispatchDesc.DebugView = g_EnableDebugOverlay;
 		fsrFiDispatchDesc.DebugTearLines = g_EnableDebugTearLines;
@@ -183,16 +184,13 @@ bool FFFrameInterpolator::CalculateResourceDimensions(NGXInstanceParameters *NGX
 	if (m_PostUpscaleRenderWidth <= 32 || m_PostUpscaleRenderHeight <= 32)
 		return false;
 
-	//
-	// At some point in time a Dying Light 2 patch fixed its depth resource issue. The game now passes
-	// the correct resource to Streamline. Prior to this, depth was being converted to RGBA8.
-	//
-	// On the other hand DL2's HUD-less resource is still screwed up. There appears to be two separate
-	// typos (copy-paste?) resulting in depth being bound as HUD-less. Manually patching game code
-	// (x86 instructions) is an effective workaround but comes with a catch: DL2's actual "HUDLESS"
-	// resource is untonemapped and therefore unusable in FSR FG.
-	//
-	const static bool isDyingLight2 = GetModuleHandleW(L"DyingLightGame_x64_rwdi.exe") != nullptr;
+	const static bool isDyingLight2 = []()
+	{
+		const auto handle = GetModuleHandleW(L"DyingLightGame_x64_rwdi.exe");
+		if (handle)
+			spdlog::info("Dying Light 2 detected. Applying HUD-less workaround.");
+		return handle != nullptr;
+	}();
 
 	if (isDyingLight2)
 	{
@@ -396,6 +394,9 @@ bool FFFrameInterpolator::BuildFrameInterpolationParameters(
 		float projMatrix[4][4];
 		memcpy(projMatrix, cameraViewToClip, sizeof(projMatrix));
 
+		if (m_CameraParamsCached && memcmp(projMatrix, m_LastCameraMatrix, sizeof(projMatrix)) == 0)
+			return true;
+
 		// BUG: Various RTX Remix-based games pass in an identity matrix which is completely useless. No
 		// idea why.
 		const bool isEmptyOrIdentityMatrix = [&]()
@@ -410,6 +411,9 @@ bool FFFrameInterpolator::BuildFrameInterpolationParameters(
 
 		if (isEmptyOrIdentityMatrix)
 			return false;
+
+		memcpy(m_LastCameraMatrix, projMatrix, sizeof(m_LastCameraMatrix));
+		m_CameraParamsCached = true;
 
 		// a 0 0 0
 		// 0 b 0 0
