@@ -48,7 +48,7 @@ FfxErrorCode FFInterpolator::Dispatch(const FFInterpolatorDispatchParameters& Pa
 
 		dispatchDesc.opticalFlowVector = Parameters.InputOpticalFlowVector;
 		dispatchDesc.opticalFlowSceneChangeDetection = Parameters.InputOpticalFlowSceneChangeDetection;
-		// dispatchDesc.opticalFlowBufferSize = Parameters.OpticalFlowBufferSize; // Completely unused?
+		dispatchDesc.opticalFlowBufferSize = Parameters.OpticalFlowBufferSize;
 		dispatchDesc.opticalFlowScale = Parameters.OpticalFlowScale;
 		dispatchDesc.opticalFlowBlockSize = Parameters.OpticalFlowBlockSize;
 
@@ -65,7 +65,7 @@ FfxErrorCode FFInterpolator::Dispatch(const FFInterpolatorDispatchParameters& Pa
 		dispatchDesc.minMaxLuminance[0] = Parameters.MinMaxLuminance.x;
 		dispatchDesc.minMaxLuminance[1] = Parameters.MinMaxLuminance.y;
 
-		dispatchDesc.frameID = 0; // Not async and not bindless. Don't bother.
+		dispatchDesc.frameID = Parameters.FrameID;
 
 		dispatchDesc.dilatedDepth = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_DilatedDepth);
 		dispatchDesc.dilatedMotionVectors = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_DilatedMotionVectors);
@@ -107,6 +107,7 @@ FfxErrorCode FFInterpolator::CreateContextDeferred(const FFInterpolatorDispatchP
 {
 	FfxFrameInterpolationContextDescription desc = {};
 	desc.backendInterface = m_BackendInterface;
+	desc.flags = FFX_FRAMEINTERPOLATION_ENABLE_ASYNC_SUPPORT;
 
 	if (Parameters.DepthInverted)
 		desc.flags |= FFX_FRAMEINTERPOLATION_ENABLE_DEPTH_INVERTED;

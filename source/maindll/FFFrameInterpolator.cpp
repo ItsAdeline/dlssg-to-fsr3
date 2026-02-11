@@ -7,12 +7,14 @@
 bool g_EnableDebugOverlay = false;
 bool g_EnableDebugTearLines = false;
 bool g_EnableInterpolatedFramesOnly = false;
+bool g_HalfResOpticalFlow = true;
 
 extern "C" void __declspec(dllexport) RefreshGlobalConfiguration()
 {
 	g_EnableDebugOverlay = Util::GetSetting(L"EnableDebugOverlay", false);
 	g_EnableDebugTearLines = Util::GetSetting(L"EnableDebugTearLines", false);
 	g_EnableInterpolatedFramesOnly = Util::GetSetting(L"EnableInterpolatedFramesOnly", false);
+	g_HalfResOpticalFlow = Util::GetSetting(L"HalfResOpticalFlow", true);
 }
 
 FFFrameInterpolator::FFFrameInterpolator(uint32_t OutputWidth, uint32_t OutputHeight)
@@ -45,16 +47,21 @@ FfxErrorCode FFFrameInterpolator::Dispatch(void *CommandList, NGXInstanceParamet
 	{
 		const bool enableInterpolation = NGXParameters->GetUIntOrDefault("DLSSG.EnableInterp", 0) != 0;
 
-		LoadTextureFromNGXParameters(NGXParameters, "DLSSG.Backbuffer", &gameBackBufferResource, FFX_RESOURCE_STATE_COMPUTE_READ);
-		LoadTextureFromNGXParameters(NGXParameters, "DLSSG.OutputReal", &gameRealOutputResource, FFX_RESOURCE_STATE_UNORDERED_ACCESS);
-
 		if (!enableInterpolation)
+		{
+			LoadTextureFromNGXParameters(NGXParameters, "DLSSG.Backbuffer", &gameBackBufferResource, FFX_RESOURCE_STATE_COMPUTE_READ);
+			LoadTextureFromNGXParameters(NGXParameters, "DLSSG.OutputReal", &gameRealOutputResource, FFX_RESOURCE_STATE_UNORDERED_ACCESS);
 			return FFX_OK;
+		}
 
 		if (!CalculateResourceDimensions(NGXParameters))
 			return FFX_ERROR_INVALID_ARGUMENT;
 
-		QueryHDRLuminanceRange(NGXParameters);
+		if (NGXParameters->GetUIntOrDefault("DLSSG.ColorBuffersHDR", 0) != 0)
+			QueryHDRLuminanceRange(NGXParameters);
+
+		LoadTextureFromNGXParameters(NGXParameters, "DLSSG.Backbuffer", &gameBackBufferResource, FFX_RESOURCE_STATE_COMPUTE_READ);
+		LoadTextureFromNGXParameters(NGXParameters, "DLSSG.OutputReal", &gameRealOutputResource, FFX_RESOURCE_STATE_UNORDERED_ACCESS);
 
 		// Parameter setup
 		FfxOpticalflowDispatchDescription fsrOfDispatchDesc = {};
@@ -206,9 +213,6 @@ bool FFFrameInterpolator::CalculateResourceDimensions(NGXInstanceParameters *NGX
 
 void FFFrameInterpolator::QueryHDRLuminanceRange(NGXInstanceParameters *NGXParameters)
 {
-	if (NGXParameters->GetUIntOrDefault("DLSSG.ColorBuffersHDR", 0) == 0)
-		return;
-
 	if (m_HDRLuminanceRangeSet)
 		return;
 
@@ -275,8 +279,16 @@ bool FFFrameInterpolator::BuildOpticalFlowParameters(
 		!LoadTextureFromNGXParameters(NGXParameters, "DLSSG.Backbuffer", &desc.color, FFX_RESOURCE_STATE_COMPUTE_READ))
 		return false;
 
-	desc.color.description.width = m_PostUpscaleRenderWidth; // Explicit override
-	desc.color.description.height = m_PostUpscaleRenderHeight;
+	if (g_HalfResOpticalFlow)
+	{
+		desc.color.description.width = (m_SwapchainWidth + 1) / 2;
+		desc.color.description.height = (m_SwapchainHeight + 1) / 2;
+	}
+	else
+	{
+		desc.color.description.width = m_SwapchainWidth;
+		desc.color.description.height = m_SwapchainHeight;
+	}
 
 	desc.opticalFlowVector = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_TexSharedOpticalFlowVector);
 	desc.opticalFlowSCD = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_TexSharedOpticalFlowSCD);
@@ -345,7 +357,15 @@ bool FFFrameInterpolator::BuildFrameInterpolationParameters(
 	desc.InputOpticalFlowVector = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_TexSharedOpticalFlowVector);
 	desc.InputOpticalFlowSceneChangeDetection = m_SharedBackendInterface.fpGetResource(&m_SharedBackendInterface, *m_TexSharedOpticalFlowSCD);
 
-	desc.OpticalFlowScale = { 1.0f / m_PostUpscaleRenderWidth, 1.0f / m_PostUpscaleRenderHeight };
+	desc.OpticalFlowBufferSize = { m_SwapchainWidth, m_SwapchainHeight };
+
+	if (g_HalfResOpticalFlow)
+	{
+		desc.OpticalFlowBufferSize.width = (desc.OpticalFlowBufferSize.width + 1) / 2;
+		desc.OpticalFlowBufferSize.height = (desc.OpticalFlowBufferSize.height + 1) / 2;
+	}
+
+	desc.OpticalFlowScale = { 1.0f / desc.OpticalFlowBufferSize.width, 1.0f / desc.OpticalFlowBufferSize.height };
 	desc.OpticalFlowBlockSize = 8;
 
 	FfxDimensions2D mvecExtents = {
@@ -508,10 +528,18 @@ void FFFrameInterpolator::DestroyBackend()
 
 FfxErrorCode FFFrameInterpolator::CreateOpticalFlowContext()
 {
+	FfxDimensions2D ofResolution = { m_SwapchainWidth, m_SwapchainHeight };
+
+	if (g_HalfResOpticalFlow)
+	{
+		ofResolution.width = (ofResolution.width + 1) / 2;
+		ofResolution.height = (ofResolution.height + 1) / 2;
+	}
+
 	FfxOpticalflowContextDescription fsrOfDescription = {
 		.backendInterface = m_FrameInterpolationBackendInterface,
 		.flags = 0,
-		.resolution = { m_SwapchainWidth, m_SwapchainHeight },
+		.resolution = ofResolution,
 	};
 
 	auto status = ffxOpticalflowContextCreate(&m_OpticalFlowContext.emplace(), &fsrOfDescription);

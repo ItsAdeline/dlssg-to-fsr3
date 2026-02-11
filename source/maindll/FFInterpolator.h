@@ -17,6 +17,7 @@ struct FFInterpolatorDispatchParameters
 
     FfxResource InputOpticalFlowVector;
     FfxResource InputOpticalFlowSceneChangeDetection;
+	FfxDimensions2D OpticalFlowBufferSize;
     FfxFloatCoords2D OpticalFlowScale;
     int OpticalFlowBlockSize;
 
@@ -36,13 +37,14 @@ struct FFInterpolatorDispatchParameters
 	bool DebugTearLines;
 	bool DebugView;
 
-    	float CameraNear;
-    	float CameraFar;
-    	float CameraFovAngleVertical;
-    	FfxFloatCoords2D MinMaxLuminance;
-    
-    	float FrameTimeDelta;
-    };
+	float CameraNear;
+	float CameraFar;
+	float CameraFovAngleVertical;
+	FfxFloatCoords2D MinMaxLuminance;
+
+	float FrameTimeDelta;
+	uint32_t FrameID;
+};
 class FFInterpolator
 {
 private:

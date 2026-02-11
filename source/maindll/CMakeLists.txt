@@ -75,6 +75,9 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 			"/Zc:inline"
 			"/EHsc"
 
+			# Aggressive optimizations
+			"$<$<CONFIG:RELEASE>:/O2;/Oi;/Ot;/Gy;/arch:AVX2>"
+
 			"/W4"
 			"/wd4100"	# '': unreferenced formal parameter
 			"/wd4200"	# nonstandard extension used: zero-sized array in struct/union
