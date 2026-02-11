@@ -36,10 +36,6 @@ private:
 	uint32_t m_PostUpscaleRenderHeight = 0;
 
 	float m_LastFrameTimeDelta = 1000.0f / 60.0f;
-	uint32_t m_FrameID = 0;
-
-	float m_LastCameraMatrix[4][4] = {};
-	bool m_CameraParamsCached = false;
 
 public:
 	FFFrameInterpolator(uint32_t OutputWidth, uint32_t OutputHeight);
